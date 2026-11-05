@@ -1,0 +1,672 @@
+==========================================================================
+ASSIGNMENT 3 - JAVASCRIPT SOLUTIONS (Q1 - Q10)
+==========================================================================
+How to use:
+  * Each question below is a separate file. The file name is shown in the
+    header (q1.js, q2.js ...). Copy each block into its own file.
+  * Run with Node.js:   node q1.js     (Q6 optional input: node q6.js 7)
+  * All output is shown with console.log(). No external libraries used.
+  * For debugger / breakpoint tasks: open the file in VS Code, click left of
+    a line number to set a breakpoint (or use the `debugger;` statement),
+    press F5, and add variables in the WATCH panel.
+==========================================================================
+
+
+
+##########################################################################
+Q1 - Dynamic Data Parser            (file: q1.js)
+##########################################################################
+
+"use strict";
+
+// Mixed data coming from an "API"
+const apiData = ["25", "true", "false", "NaN", " ", "100px", "3.14", null, undefined];
+
+const validNumbers = [];   // values that are real, usable numbers
+const invalidNumbers = []; // values that must be skipped (logged separately)
+
+// DEBUG OBSERVATION: Number(" ") gives 0 and Number(null) gives 0, NOT NaN.
+// So checking only isNaN() would wrongly accept " " and null.
+// That is why we add extra checks before trusting Number().
+function isValidNumber(value) {
+  if (value === null || value === undefined) return false;          // no data
+  if (typeof value === "string" && value.trim() === "") return false; // blank string
+  const num = Number(value);
+  return !Number.isNaN(num) && Number.isFinite(num);                // "NaN", "100px" fail here
+}
+
+console.log("=== DETAILED REPORT ===");
+
+for (let i = 0; i < apiData.length; i++) {
+  const value = apiData[i];
+
+  // 1. Convert to Number, Boolean and String forms
+  const asNumber = Number(value);   // "true" -> NaN, null -> 0, undefined -> NaN
+  const asBoolean = Boolean(value); // any non-empty string (even "false") -> true
+  const asString = String(value);   // null -> "null", undefined -> "undefined"
+
+  // 2. Conditional formatting
+  const status = isValidNumber(value) ? "[ VALID   ]" : "[ INVALID ]";
+  console.log(
+    `${status} index=${i} raw=${JSON.stringify(value)} | Number=${asNumber} | Boolean=${asBoolean} | String="${asString}"`
+  );
+
+  // 3. Build the two arrays
+  if (isValidNumber(value)) {
+    validNumbers.push(Number(value));
+  } else {
+    invalidNumbers.push(value);
+    console.log(`   -> Skipped invalid number: ${asString}`);
+  }
+}
+
+console.log("\n=== SUMMARY ===");
+console.log("Valid numeric data   :", validNumbers);
+console.log("Invalid / skipped    :", invalidNumbers);
+console.log(`Total: ${apiData.length}, Valid: ${validNumbers.length}, Invalid: ${invalidNumbers.length}`);
+// Expected valid: [25, 3.14]
+// NOTE: the string "true"/"false" -> Number gives NaN, so they are invalid numbers.
+
+
+
+##########################################################################
+Q2 - Employee Bonus Calculator      (file: q2.js)
+##########################################################################
+
+"use strict"; // any accidental undeclared variable will throw ReferenceError
+
+const employees = [
+  { name: "Amit", salary: "45000", years: "5" },
+  { name: "Sara", salary: "38000", years: "2" },
+  { name: "Kiran", salary: "52000", years: "7" }
+];
+
+function calculateBonus(emp) {
+  // Validate the record itself
+  if (emp === null || typeof emp !== "object") {
+    throw new TypeError("Employee record is not an object");
+  }
+  // Missing property check
+  for (const key of ["name", "salary", "years"]) {
+    if (!(key in emp)) {
+      throw new Error(`Missing property: "${key}"`);
+    }
+  }
+
+  // 1. Convert strings to numbers
+  const salary = Number(emp.salary);
+  const years = Number(emp.years);
+  if (Number.isNaN(salary) || Number.isNaN(years)) {
+    throw new TypeError(`Cannot convert salary/years to number for ${emp.name}`);
+  }
+
+  // 2. Bonus rule: 10% if years > 3, else 5%
+  const bonus = years > 3 ? salary * 0.1 : salary * 0.05;
+
+  return { name: emp.name, salary, years, bonus, total: salary + bonus };
+}
+
+// 4. Template strings for formatted output, 5. try...catch for errors
+function printEmployees(list) {
+  for (const emp of list) {
+    try {
+      const r = calculateBonus(emp);
+      console.log(
+        `Name: ${r.name} | Salary: ${r.salary.toFixed(2)} | Years: ${r.years} | Bonus: ${r.bonus.toFixed(2)} | Total: ${r.total.toFixed(2)}`
+      );
+    } catch (err) {
+      console.log(`ERROR (${err.name}): ${err.message}`);
+    }
+  }
+}
+
+console.log("--- Valid employees ---");
+printEmployees(employees);
+// Amit  -> 4500.00 bonus, Sara -> 1900.00 bonus, Kiran -> 5200.00 bonus
+
+console.log("\n--- Bad data (to demonstrate try...catch) ---");
+printEmployees([
+  { name: "Ravi", salary: "abc", years: "3" }, // conversion error
+  { name: "Neha", years: "4" },                // missing salary
+  null                                         // not an object
+]);
+
+
+
+##########################################################################
+Q3 - Transaction Validator          (file: q3.js)
+##########################################################################
+
+"use strict";
+
+const transactions = [
+  { id: 1, amount: 2000 },
+  { id: 2, amount: -500 },
+  { id: 3 },
+  null
+];
+
+// ---- Custom error classes ----
+class NegativeAmountError extends Error {
+  constructor(message) { super(message); this.name = "NegativeAmountError"; }
+}
+class MissingFieldError extends Error {
+  constructor(message) { super(message); this.name = "MissingFieldError"; }
+}
+class NullEntryError extends Error {
+  constructor(message) { super(message); this.name = "NullEntryError"; }
+}
+
+function validateTransaction(tx) {
+  // Null check must come FIRST, otherwise tx.id would crash with TypeError
+  if (tx === null) {
+    throw new NullEntryError("Transaction entry is null");
+  }
+  if (tx.id === undefined || tx.amount === undefined) {
+    const missing = [];
+    if (tx.id === undefined) missing.push("id");
+    if (tx.amount === undefined) missing.push("amount");
+    throw new MissingFieldError(`Missing ${missing.join(" and ")} in ${JSON.stringify(tx)}`);
+  }
+  if (tx.amount < 0) {
+    throw new NegativeAmountError(`Negative amount (${tx.amount}) in transaction id ${tx.id}`);
+  }
+  return tx;
+}
+
+const valid = [];
+const invalid = [];
+const errorCounts = {}; // categorize errors by type
+
+for (let i = 0; i < transactions.length; i++) {
+  const tx = transactions[i];
+
+  // 5. BREAKPOINT: set a breakpoint on the next line in VS Code (or keep
+  // the debugger statement). Watch: i, tx, valid.length, invalid.length.
+  debugger;
+
+  try {
+    valid.push(validateTransaction(tx));
+  } catch (err) {
+    invalid.push({ index: i, type: err.name, message: err.message });
+    errorCounts[err.name] = (errorCounts[err.name] || 0) + 1;
+  }
+}
+
+console.log("=== FINAL REPORT ===");
+console.log("Valid transactions  :", valid);
+console.log("Invalid transactions:");
+for (const item of invalid) {
+  console.log(`  [index ${item.index}] ${item.type}: ${item.message}`);
+}
+console.log("Errors by type:", errorCounts);
+console.log(`Successful: ${valid.length}, Failed: ${invalid.length}`);
+
+
+
+##########################################################################
+Q4 - Debugging Mystery              (file: q4.js)
+##########################################################################
+
+"use strict";
+
+// ---- Original code (throws an error) ----
+function showMessage() {
+  greeting = "Welcome"; // undeclared variable
+  console.log(greeting);
+}
+
+try {
+  showMessage();
+} catch (err) {
+  console.log(`${err.name}: ${err.message}`); // ReferenceError: greeting is not defined
+}
+
+// 1. WHY THE ERROR?
+// Without "use strict", assigning to an undeclared name silently creates a
+// GLOBAL variable (implicit global). In strict mode that behaviour is
+// removed: assigning to something never declared with let/const/var throws
+// a ReferenceError. This catches typos and accidental globals.
+
+// 2. FIX: declare the variable (let/const) so it has a proper scope.
+function showMessageFixed() {
+  const greeting = "Welcome"; // block/function scoped, lives only here
+  console.log(greeting);
+}
+showMessageFixed();
+// Scope rule change: variable must now be declared first. It is local to the
+// function, so it no longer leaks onto the global object.
+
+console.log(typeof greeting); // "undefined" -> proof that nothing leaked to global scope
+
+// 3. DEBUGGER STEPS (VS Code):
+//  - Put a breakpoint on the line inside showMessageFixed.
+//  - Press F5. In the WATCH panel click "+" and add:  greeting
+//  - Before the line runs, greeting shows as <not available>/undefined (TDZ).
+//    After stepping (F10), it shows "Welcome".
+//  - In the CALL STACK panel you will see:
+//        showMessageFixed
+//        (anonymous)  <- main module code
+//    Use F11 (step into) to move between frames.
+
+
+
+##########################################################################
+Q5 - Hoisting Lab: The Sequence Trap   (file: q5.js)
+##########################################################################
+
+// ---- Part A: Original code (prediction) ----
+// PREDICTION OUTPUT:
+//   undefined       (var score is hoisted and initialised to undefined)
+//   Game started    (function declarations are fully hoisted)
+//   ready           (let status was initialised before startGame() was called)
+
+console.log(score);
+announce();
+var score = 50;
+function announce() { console.log("Game started"); }
+let status = "ready";
+startGame();
+function startGame() {
+  console.log(status);
+}
+
+// ---- 1. Memory state of each hoisted element ----
+// score      (var)      -> hoisted, created in memory with value undefined
+//                          (assignment 50 happens later, at its line).
+// announce   (function) -> hoisted with its WHOLE body, callable anywhere.
+// status     (let)      -> hoisted but in the Temporal Dead Zone (TDZ) until
+//                          the line "let status = 'ready'" runs. Reading it
+//                          earlier throws ReferenceError.
+// startGame  (function) -> hoisted with its whole body, callable anywhere.
+
+// ---- 2. Fixed / safe version ----
+console.log("\n--- Fixed version ---");
+var score2 = 50;                       // assign BEFORE using
+function announce2() { console.log("Game started"); }
+let status2 = "ready";                 // declare BEFORE using
+function startGame2() { console.log(status2); }
+
+console.log(score2);  // 50
+announce2();
+startGame2();
+
+// TDZ demonstration
+try {
+  console.log(lateLet); // ReferenceError
+  let lateLet = "too late";
+} catch (e) {
+  console.log(`TDZ: ${e.name}: ${e.message}`);
+}
+
+// ---- 3. Arrow function comparison ----
+console.log("\n--- Arrow function version ---");
+
+// With const: arrow function is in TDZ before its line
+try {
+  announceArrow();
+  const announceArrow = () => console.log("Game started");
+} catch (e) {
+  console.log(`const arrow: ${e.name}: ${e.message}`); // ReferenceError
+}
+
+// With var: variable hoisted as undefined, so calling it fails differently
+try {
+  announceVar();
+  var announceVar = () => console.log("Game started");
+} catch (e) {
+  console.log(`var arrow  : ${e.name}: ${e.message}`); // TypeError: not a function
+}
+
+// Correct order: define first, then call
+const startGameArrow = () => console.log(status2);
+startGameArrow(); // ready
+
+// DIFFERENCE: function declarations are hoisted with their body.
+// Arrow functions are only values stored in variables, so they follow the
+// hoisting rules of var/let/const (undefined or TDZ) and must be defined
+// BEFORE they are called.
+
+
+
+##########################################################################
+Q6 - Pyramid Pattern Generator      (file: q6.js)
+##########################################################################
+
+"use strict";
+
+// 3. Rows controlled by user input (command line: node q6.js 7), default = 5
+const inputRows = Number.parseInt(process.argv[2], 10);
+const ROWS = Number.isInteger(inputRows) && inputRows > 0 ? inputRows : 5;
+
+// ---- Version with let ----
+function printPatternLet(rows) {
+  for (let i = 1; i <= rows; i++) {
+    let line = "";
+    for (let j = 1; j <= i; j++) {
+      line += "* ";
+    }
+    console.log(line.trimEnd());
+  }
+  // i and j do NOT exist here (block scoped)
+  console.log("let  -> typeof i after loop:", typeof i); // "undefined"
+}
+console.log(`--- Pattern with let (rows = ${ROWS}) ---`);
+printPatternLet(ROWS);
+
+// ---- 1. Version with var ----
+function printPatternVar(rows) {
+  for (var i = 1; i <= rows; i++) {
+    var line = "";
+    for (var j = 1; j <= i; j++) {
+      line += "* ";
+    }
+    console.log(line.trimEnd());
+  }
+  // var is function scoped, so i and j LEAK out of the loops
+  console.log(`var  -> after loop: i = ${i}, j = ${j}`);
+}
+console.log(`\n--- Pattern with var ---`);
+printPatternVar(ROWS);
+// Output of the pattern is the same, BUT i and j remain alive after the loop.
+
+// ---- 2. Variable re-use trap with var ----
+function buggyPatternVar(rows) {
+  for (var i = 1; i <= rows; i++) {
+    var count = i;
+    var line = "";
+    for (var i = 1; i <= count; i++) { // SAME variable i is reused!
+      line += "* ";
+    }
+    console.log(line.trimEnd());
+  }
+}
+console.log("\n--- Buggy var version (inner loop re-uses i) ---");
+buggyPatternVar(3);
+// Prints only "*" and "* * *": row 2 is skipped because the inner loop
+// changed the outer loop's counter. With let, each loop has its own i.
+
+// DEBUG STEPS: put a breakpoint inside the inner loop, add i, j, line to
+// WATCH. With let you see separate scopes (Block / Local) per iteration.
+// With var there is only one i in the Local scope, being overwritten.
+
+// ---- 4. Strict mode catches undeclared loop variables ----
+console.log("\n--- Undeclared loop variable ---");
+try {
+  for (k = 1; k <= 3; k++) { // k never declared
+    console.log(k);
+  }
+} catch (e) {
+  console.log(`${e.name}: ${e.message}`); // ReferenceError: k is not defined
+}
+
+
+
+##########################################################################
+Q7 - Smart Calculator               (file: q7.js)
+##########################################################################
+
+"use strict";
+
+const operations = ["add", "divide", "power", "root", "subtract"];
+const num1 = 25, num2 = 0;
+
+// ---- Custom errors ----
+class DivideByZeroError extends Error {
+  constructor(message) { super(message); this.name = "DivideByZeroError"; }
+}
+class NegativeRootError extends Error {
+  constructor(message) { super(message); this.name = "NegativeRootError"; }
+}
+class InvalidOperationError extends Error {
+  constructor(message) { super(message); this.name = "InvalidOperationError"; }
+}
+
+function calculate(op, a, b) {
+  switch (op) {
+    case "add":
+      return a + b;
+    case "subtract":
+      return a - b;
+    case "divide":
+      if (b === 0) throw new DivideByZeroError("Cannot divide by zero");
+      return a / b;
+    case "power":
+      return Math.pow(a, b);
+    case "root": // square root of a
+      if (a < 0) throw new NegativeRootError(`Cannot take root of negative number (${a})`);
+      return Math.sqrt(a);
+    default:
+      throw new InvalidOperationError(`Operation "${op}" is not recognized`);
+  }
+}
+
+function runAll(list, a, b) {
+  const summary = [];
+  for (const op of list) {
+    try {
+      const result = calculate(op, a, b);
+      summary.push(`${op.padEnd(9)} | ${a}, ${b} | Result: ${result}`);
+    } catch (err) {
+      summary.push(`${op.padEnd(9)} | ${a}, ${b} | ${err.name}: ${err.message}`);
+    }
+  }
+  return summary;
+}
+
+console.log("=== CALCULATOR SUMMARY (25, 0) ===");
+runAll(operations, num1, num2).forEach(line => console.log(line));
+// add -> 25, divide -> DivideByZeroError, power -> 1, root -> 5, subtract -> 25
+
+console.log("\n=== EXTRA TESTS ===");
+runAll(["root"], -9, 0).forEach(line => console.log(line));      // NegativeRootError
+runAll(["modulus"], num1, 3).forEach(line => console.log(line)); // InvalidOperationError
+
+
+
+##########################################################################
+Q8 - Strict Mode Showdown           (file: q8.js)
+##########################################################################
+// IMPORTANT: do NOT put "use strict" at the top of this file. Part A needs
+// sloppy (non-strict) mode. Strict-mode tests are run through new Function(),
+// because duplicate params and `delete variable` are SYNTAX errors that
+// would stop the whole file from running.
+
+// ---- 1. WITHOUT "use strict" ----
+console.log("=== WITHOUT strict mode ===");
+function demo(a, a) {       // duplicate parameter names allowed
+  total = 10;               // creates an implicit global variable
+  console.log("a =", a);    // 10 -> the LAST duplicate wins
+  console.log("total =", total);
+  console.log("delete total ->", delete total); // true: global property removed
+  console.log("typeof total after delete:", typeof total); // "undefined"
+}
+demo(5, 10);
+
+// ---- 1. WITH "use strict" ----
+console.log("\n=== WITH strict mode ===");
+
+function runStrict(label, code) {
+  try {
+    new Function('"use strict";\n' + code)();
+    console.log(`${label}: no error`);
+  } catch (e) {
+    console.log(`${label}: ${e.name}: ${e.message}`);
+  }
+}
+
+runStrict("Duplicate parameter ", "function demo(a, a) {}");              // SyntaxError
+runStrict("Undeclared variable ", "total = 10;");                          // ReferenceError
+runStrict("delete variable     ", "var t = 1; delete t;");                 // SyntaxError
+
+// ---- 2. Recorded differences ----
+// | Operation            | Sloppy mode              | Strict mode          |
+// | function(a, a)       | allowed, last value wins | SyntaxError          |
+// | total = 10 (no decl) | creates global variable  | ReferenceError       |
+// | delete total         | allowed / returns true   | SyntaxError          |
+
+// ---- 3. WHY strict mode forbids them ----
+// - Duplicate params: ambiguous, first argument becomes unreachable; almost
+//   always a typo/bug.
+// - Implicit globals: typos silently create global variables, pollute the
+//   global scope and cause hard-to-find bugs.
+// - delete on a plain variable: variables are not meant to be removed; it
+//   only worked by accident for implicit globals. delete is for object
+//   properties.
+
+// ---- 4. Correct ES6 version ----
+"use strict"; // (a directive only counts at the top of a file/function,
+              // so we enable it inside the function below)
+function demoFixed(a, b) {
+  "use strict";
+  let total = 10;                  // declared properly
+  const data = { total };          // delete is only used on object properties
+  delete data.total;               // legal in strict mode
+  console.log("\nFixed version:", a, b, total, data);
+}
+demoFixed(5, 10);
+
+// Modern alternative with arrow + default params:
+const demoArrow = (a, b = 10) => {
+  const total = a + b;
+  return total;
+};
+console.log("Arrow version result:", demoArrow(5, 10)); // 15
+
+
+
+##########################################################################
+Q9 - JSON Audit                     (file: q9.js)
+##########################################################################
+
+"use strict";
+
+const rawData = [
+  '{"user":"Alex","age":25}',
+  '{"id":2}',
+  '{invalid}',
+  '{"user":"Mina","age":"22"}'
+];
+
+const cleanData = []; // valid entries
+const errors = [];    // errors with line numbers
+const REQUIRED_KEYS = ["user", "age"];
+
+for (let i = 0; i < rawData.length; i++) {
+  const lineNo = i + 1;
+
+  // 4. DEBUG: put a breakpoint here. Watch: i, lineNo, rawData[i], cleanData.
+  // When JSON.parse fails on line 3, execution JUMPS from the try block
+  // straight to the catch block (the lines after JSON.parse are skipped),
+  // then the loop continues with the next item.
+  try {
+    const obj = JSON.parse(rawData[i]); // may throw SyntaxError (invalid JSON)
+
+    // 2. Detect missing keys
+    const missing = REQUIRED_KEYS.filter(
+      key => !Object.prototype.hasOwnProperty.call(obj, key)
+    );
+    if (missing.length > 0) {
+      throw new Error(`Missing key(s): ${missing.join(", ")}`);
+    }
+
+    cleanData.push(obj); // 3. valid entries
+  } catch (err) {
+    const type = err instanceof SyntaxError ? "Invalid JSON" : "Missing keys";
+    errors.push({ line: lineNo, type, message: err.message });
+    console.log(`Line ${lineNo} -> ${type}: ${err.message}`);
+  }
+}
+
+console.log("\nClean data:", cleanData);
+console.log("Errors:", errors);
+
+// ---- 5. Bonus: convert age to Number and filter under-18 users ----
+const adults = cleanData
+  .map(entry => ({ user: entry.user, age: Number(entry.age) })) // "22" -> 22
+  .filter(entry => entry.age >= 18);
+console.log("\nAdults (age >= 18):", adults);
+
+const minors = cleanData
+  .map(entry => ({ user: entry.user, age: Number(entry.age) }))
+  .filter(entry => entry.age < 18);
+console.log("Under 18 (removed):", minors); // none in this data set
+
+
+
+##########################################################################
+Q10 - Nested Hoisting and Closures  (file: q10.js)
+##########################################################################
+
+"use strict";
+
+function outer() {
+  console.log(count);   // undefined
+  var count = 5;
+  function inner() {
+    console.log(count); // undefined
+    var count = 10;
+  }
+  inner();
+}
+outer();
+
+// ---- 1. PREDICTED OUTPUT ----
+//   undefined   (outer's own count: hoisted, not yet assigned)
+//   undefined   (inner's OWN count: hoisted inside inner, not yet assigned)
+// inner does NOT print 5, because its local "var count" shadows outer's count.
+
+// ---- 2. How hoisting creates separate memory contexts ----
+// Each function call creates its own execution context. Before running,
+// JS scans the function and hoists the var declarations inside THAT function:
+//
+//   outer's context : { count: undefined, inner: <function> }
+//   inner's context : { count: undefined }
+//
+// So inner's console.log(count) finds count in its own context first (value
+// undefined) and never looks up the scope chain to outer's count (5).
+
+// Closure comparison: remove the inner var and inner uses outer's count.
+console.log("\n--- Closure version (no inner var) ---");
+function outerClosure() {
+  var count = 5;
+  function inner() {
+    console.log(count); // 5 -> found in outer via closure (scope chain)
+  }
+  inner();
+}
+outerClosure();
+
+// ---- 3. Convert inner to an arrow function ----
+console.log("\n--- Arrow version ---");
+function outerArrow() {
+  console.log(count);   // undefined
+  var count = 5;
+  const inner = () => {
+    console.log(count); // undefined -> arrow still has its own function scope
+    var count = 10;     // so this var is still hoisted inside the arrow
+  };
+  inner();              // must be called AFTER the const definition
+}
+outerArrow();
+// Behaviour changes:
+//  - Output is the same (undefined, undefined): var inside an arrow is still
+//    local to that arrow function.
+//  - inner is no longer hoisted with its body. As a const it is in the TDZ,
+//    so calling inner() BEFORE its definition would throw ReferenceError.
+//  - Arrow has no own `this` or `arguments` (not used here).
+
+// ---- 4. Debug session / call stack flow ----
+// Breakpoint on "outer();" at the bottom, press F5, then F11 (step into):
+//   Step 1: Call stack: (anonymous) / main module
+//   Step 2: Step into outer(): stack = outer > (anonymous)
+//           WATCH: count -> undefined, then 5 after "var count = 5"
+//   Step 3: Step into inner(): stack = inner > outer > (anonymous)
+//           WATCH: count -> undefined (inner's own), then 10
+//   Step 4: inner returns, popped from stack; outer returns; stack empties.
+// In the Variables panel you can see separate "Local" scopes for outer and
+// inner, which proves the two count variables are different.
+
+==========================================================================
+END OF ASSIGNMENT 3
+==========================================================================
